@@ -1,6 +1,5 @@
 export {
   initializeTransactionalContext,
-  addTransactionalDataSource,
   getDataSourceByName,
   deleteDataSourceByName,
   getTransactionalContext,
@@ -11,9 +10,8 @@ export {
   runOnTransactionComplete,
 } from './hooks';
 export { Transactional } from './decorators/transactional';
-export { StorageDriver } from './enums/storage-driver';
 export { Propagation } from './enums/propagation';
-export { IsolationLevel } from './enums/isolation-level';
 export { runInTransaction } from './transactions/run-in-transaction';
-export { wrapInTransaction, WrapInTransactionOptions } from './transactions/wrap-in-transaction';
+export { wrapInTransaction } from './transactions/wrap-in-transaction';
+export type { WrapInTransactionOptions } from './transactions/wrap-in-transaction';
 export { TransactionalError } from './errors/transactional';

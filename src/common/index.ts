@@ -1,17 +1,15 @@
-import { DataSource, EntityManager, Repository } from 'typeorm';
 import { EventEmitter } from 'events';
 
 import {
-  TYPEORM_DATA_SOURCE_NAME,
-  TYPEORM_DATA_SOURCE_NAME_PREFIX,
-  TYPEORM_ENTITY_MANAGER_NAME,
-  TYPEORM_HOOK_NAME,
+  MIKROORM_DATA_SOURCE_NAME,
+  MIKROORM_DATA_SOURCE_NAME_PREFIX,
+  MIKROORM_ENTITY_MANAGER_NAME,
+  MIKROORM_HOOK_NAME,
 } from './constants';
-import { StorageDriver as StorageDriverEnum } from '../enums/storage-driver';
-import { TypeOrmUpdatedPatchError } from '../errors/typeorm-updated-patch';
 import { StorageDriver } from '../storage/driver/interface';
-import { isDataSource } from '../utils';
 import { storage } from '../storage';
+import { EntityManager, EntityRepository, MikroORM } from '@mikro-orm/core';
+import { isDataSource } from "../utils";
 
 export type DataSourceName = string | 'default';
 
@@ -25,13 +23,6 @@ interface TypeormTransactionalOptions {
    * You can set this options to `0` or `Infinity` to indicate an unlimited number of listeners.
    */
   maxHookHandlers: number;
-
-  /**
-   * Controls storage driver used for providing persistency during the async request timespan.
-   * You can force any of the available drivers with this option.
-   * By default, the modern AsyncLocalStorage will be preferred, if it is supported by your runtime.
-   */
-  storageDriver: StorageDriverEnum;
 }
 
 /**
@@ -46,11 +37,11 @@ interface AddTransactionalDataSourceInput {
    * Custom name for data source
    */
   name?: DataSourceName;
-  dataSource: DataSource;
+  dataSource: MikroORM;
   /**
-   * Whether to "patch" some `DataSource` methods to support their usage in transactions (default `true`).
+   * Whether to "patch" some `MikroORM` methods to support their usage in transactions (default `true`).
    *
-   * If you don't need to use `DataSource` methods in transactions and you only work with `Repositories`,
+   * If you don't need to use `MikroORM` methods in transactions and you only work with `Repositories`,
    * you can set this flag to `false`.
    */
   patch?: boolean;
@@ -59,9 +50,9 @@ interface AddTransactionalDataSourceInput {
 /**
  * Map of added data sources.
  *
- * The property "name" in the `DataSource` is deprecated, so we add own names to distinguish data sources.
+ * The property "name" in the `MikroORM` is deprecated, so we add own names to distinguish data sources.
  */
-const dataSources = new Map<DataSourceName, DataSource>();
+const dataSources = new Map<DataSourceName, MikroORM>();
 
 /**
  * Default library's state
@@ -69,7 +60,6 @@ const dataSources = new Map<DataSourceName, DataSource>();
 const data: TypeormTransactionalData = {
   options: {
     maxHookHandlers: 10,
-    storageDriver: StorageDriverEnum.CLS_HOOKED,
   },
 };
 
@@ -78,7 +68,7 @@ export const getTransactionalContext = () => storage.get();
 export const getEntityManagerByDataSourceName = (context: StorageDriver, name: DataSourceName) => {
   if (!dataSources.has(name)) return null;
 
-  return (context.get(TYPEORM_DATA_SOURCE_NAME_PREFIX + name) as EntityManager) || null;
+  return (context.get(MIKROORM_DATA_SOURCE_NAME_PREFIX + name) as EntityManager) || null;
 };
 
 export const setEntityManagerByDataSourceName = (
@@ -88,7 +78,7 @@ export const setEntityManagerByDataSourceName = (
 ) => {
   if (!dataSources.has(name)) return;
 
-  context.set(TYPEORM_DATA_SOURCE_NAME_PREFIX + name, entityManager);
+  context.set(MIKROORM_DATA_SOURCE_NAME_PREFIX + name, entityManager);
 };
 
 const getEntityManagerInContext = (dataSourceName: DataSourceName) => {
@@ -98,14 +88,14 @@ const getEntityManagerInContext = (dataSourceName: DataSourceName) => {
   return getEntityManagerByDataSourceName(context, dataSourceName);
 };
 
-const patchDataSource = (dataSource: DataSource) => {
-  let originalManager = dataSource.manager;
+const patchDataSource = (dataSource: MikroORM) => {
+  let originalManager = dataSource.em;
 
   Object.defineProperty(dataSource, 'manager', {
     configurable: true,
     get() {
       return (
-        getEntityManagerInContext(this[TYPEORM_DATA_SOURCE_NAME] as DataSourceName) ||
+        getEntityManagerInContext(this[MIKROORM_DATA_SOURCE_NAME] as DataSourceName) ||
         originalManager
       );
     },
@@ -114,37 +104,37 @@ const patchDataSource = (dataSource: DataSource) => {
     },
   });
 
-  const originalQuery = DataSource.prototype.query;
-  if (originalQuery.length !== 3) {
-    throw new TypeOrmUpdatedPatchError();
-  }
+  // const originalQuery = MikroORM.prototype.query;
+  // if (originalQuery.length !== 3) {
+  //   throw new MikroOrmUpdatedPatchError();
+  // }
 
-  dataSource.query = function (...args: unknown[]) {
-    args[2] = args[2] || this.manager?.queryRunner;
-
-    return originalQuery.apply(this, args);
-  };
-
-  const originalCreateQueryBuilder = DataSource.prototype.createQueryBuilder;
-  if (originalCreateQueryBuilder.length !== 3) {
-    throw new TypeOrmUpdatedPatchError();
-  }
-
-  dataSource.createQueryBuilder = function (...args: unknown[]) {
-    if (args.length === 0) {
-      return originalCreateQueryBuilder.apply(this, [this.manager?.queryRunner]);
-    }
-
-    args[2] = args[2] || this.manager?.queryRunner;
-
-    return originalCreateQueryBuilder.apply(this, args);
-  };
-
-  dataSource.transaction = function (...args: unknown[]) {
-    // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-    // @ts-ignore
-    return originalManager.transaction(...args);
-  };
+  // dataSource.query = function (...args: unknown[]) {
+  //   args[2] = args[2] || this.manager?.queryRunner;
+  //
+  //   return originalQuery.apply(this, args);
+  // };
+  //
+  // const originalCreateQueryBuilder = MikroORM.prototype.createQueryBuilder;
+  // if (originalCreateQueryBuilder.length !== 3) {
+  //   throw new MikroOrmUpdatedPatchError();
+  // }
+  //
+  // dataSource.createQueryBuilder = function (...args: unknown[]) {
+  //   if (args.length === 0) {
+  //     return originalCreateQueryBuilder.apply(this, [this.manager?.queryRunner]);
+  //   }
+  //
+  //   args[2] = args[2] || this.manager?.queryRunner;
+  //
+  //   return originalCreateQueryBuilder.apply(this, args);
+  // };
+  //
+  // dataSource.transaction = function (...args: unknown[]) {
+  //   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+  //   // @ts-ignore
+  //   return originalManager.transaction(...args);
+  // };
 };
 
 const setTransactionalOptions = (options?: Partial<TypeormTransactionalOptions>) => {
@@ -162,27 +152,27 @@ export const initializeTransactionalContext = (options?: Partial<TypeormTransact
       get() {
         return (
           getEntityManagerInContext(
-            this[TYPEORM_ENTITY_MANAGER_NAME].connection[
-              TYPEORM_DATA_SOURCE_NAME
+            this[MIKROORM_ENTITY_MANAGER_NAME].connection[
+              MIKROORM_DATA_SOURCE_NAME
             ] as DataSourceName,
-          ) || this[TYPEORM_ENTITY_MANAGER_NAME]
+          ) || this[MIKROORM_ENTITY_MANAGER_NAME]
         );
       },
       set(manager: EntityManager | undefined) {
-        this[TYPEORM_ENTITY_MANAGER_NAME] = manager;
+        this[MIKROORM_ENTITY_MANAGER_NAME] = manager;
       },
     });
   };
 
-  const getRepository = (originalFn: (args: unknown) => unknown) => {
-    return function patchRepository(...args: unknown[]) {
+  const getRepository = (originalFn: (args: any) => any) => {
+    return function patchRepository(this: any, ...args: any) {
       const repository = originalFn.apply(this, args);
 
-      if (!(TYPEORM_ENTITY_MANAGER_NAME in repository)) {
+      if (!(MIKROORM_ENTITY_MANAGER_NAME in repository)) {
         /**
          * Store current manager
          */
-        repository[TYPEORM_ENTITY_MANAGER_NAME] = repository.manager;
+        repository[MIKROORM_ENTITY_MANAGER_NAME] = repository.manager;
       }
 
       return repository;
@@ -190,25 +180,24 @@ export const initializeTransactionalContext = (options?: Partial<TypeormTransact
   };
 
   const originalGetRepository = EntityManager.prototype.getRepository;
-  const originalExtend = Repository.prototype.extend;
+  // const originalExtend = EntityRepository.prototype.extend;
 
   EntityManager.prototype.getRepository = getRepository(originalGetRepository);
-  Repository.prototype.extend = getRepository(originalExtend);
+  // EntityRepository.prototype.extend = getRepository(originalExtend);
 
-  patchManager(Repository.prototype);
+  patchManager(EntityRepository.prototype);
 
-  const { storageDriver } = getTransactionalOptions();
-  return storage.create(storageDriver);
+  return storage.create();
 };
 
-export const addTransactionalDataSource = (input: AddTransactionalDataSourceInput | DataSource) => {
+export const addTransactionalDataSource = (input: AddTransactionalDataSourceInput | MikroORM) => {
   if (isDataSource(input)) {
     input = { name: 'default', dataSource: input, patch: true };
   }
 
   const { name = 'default', dataSource, patch = true } = input;
   if (dataSources.has(name)) {
-    throw new Error(`DataSource with name "${name}" has already added.`);
+    throw new Error(`MikroORM with name "${name}" has already added.`);
   }
 
   if (patch) {
@@ -218,7 +207,7 @@ export const addTransactionalDataSource = (input: AddTransactionalDataSourceInpu
   dataSources.set(name, dataSource);
   // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore
-  dataSource[TYPEORM_DATA_SOURCE_NAME] = name;
+  dataSource[MIKROORM_DATA_SOURCE_NAME] = name;
 
   return input.dataSource;
 };
@@ -228,7 +217,7 @@ export const getDataSourceByName = (name: DataSourceName) => dataSources.get(nam
 export const deleteDataSourceByName = (name: DataSourceName) => dataSources.delete(name);
 
 export const getHookInContext = (context: StorageDriver | undefined) =>
-  context?.get(TYPEORM_HOOK_NAME) as EventEmitter | null;
+  context?.get(MIKROORM_HOOK_NAME) as EventEmitter | null;
 
 export const setHookInContext = (context: StorageDriver, emitter: EventEmitter | null) =>
-  context.set(TYPEORM_HOOK_NAME, emitter);
+  context.set(MIKROORM_HOOK_NAME, emitter);

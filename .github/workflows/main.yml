@@ -7,7 +7,7 @@ jobs:
     strategy:
       matrix:
         version: ['12.x', '18.x', '20.x']
-        storageDriver: ['ASYNC_LOCAL_STORAGE', 'CLS_HOOKED']
+        storageDriver: ['ASYNC_LOCAL_STORAGE']
     steps:
       - uses: actions/checkout@v4
 
@@ -33,7 +33,7 @@ jobs:
 
       - uses: actions/setup-node@v3
         with:
-          node-version: '12.x'
+          node-version: '20.x'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install

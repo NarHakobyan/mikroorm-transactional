@@ -1,4 +1,3 @@
-import { EntityManager } from 'typeorm';
 import {
   DataSourceName,
   getDataSourceByName,
@@ -7,10 +6,10 @@ import {
   setEntityManagerByDataSourceName,
 } from '../common';
 
-import { IsolationLevel } from '../enums/isolation-level';
 import { Propagation } from '../enums/propagation';
 import { runInNewHookContext } from '../hooks';
 import { TransactionalError } from '../errors/transactional';
+import { EntityManager, IsolationLevel } from '@mikro-orm/core';
 
 export interface WrapInTransactionOptions {
   /**
@@ -58,9 +57,7 @@ export const wrapInTransaction = <Fn extends (this: any, ...args: any[]) => Retu
         setEntityManagerByDataSourceName(context, connectionName, entityManager);
 
         try {
-          const result = await runOriginal();
-
-          return result;
+          return await runOriginal();
         } finally {
           setEntityManagerByDataSourceName(context, connectionName, null);
         }
@@ -68,11 +65,11 @@ export const wrapInTransaction = <Fn extends (this: any, ...args: any[]) => Retu
 
       if (isolationLevel) {
         return runInNewHookContext(context, () => {
-          return dataSource.transaction(isolationLevel, transactionCallback);
+          return dataSource.em.transactional(transactionCallback, { isolationLevel });
         });
       } else {
         return runInNewHookContext(context, () => {
-          return dataSource.transaction(transactionCallback);
+          return dataSource.em.transactional(transactionCallback);
         });
       }
     };

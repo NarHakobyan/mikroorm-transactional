@@ -43,7 +43,7 @@ export const runAndTriggerHooks = async (hook: EventEmitter, cb: () => unknown) 
   }
 };
 
-export const createEventEmitterInNewContext = (context: StorageDriver) => {
+export const createEventEmitterInNewContext = (_context: StorageDriver) => {
   const options = getTransactionalOptions();
 
   const emitter = new EventEmitter();

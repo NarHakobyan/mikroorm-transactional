@@ -1,9 +1,9 @@
-import { DataSource } from 'typeorm';
+import { MikroORM } from '@mikro-orm/core';
 
-export const isDataSource = (value: unknown): value is DataSource => {
+export const isDataSource = (value: unknown): value is MikroORM => {
   if (!value || typeof value !== 'object') {
     return false;
   }
 
-  return value.constructor.name === DataSource.name;
+  return value.constructor.name === MikroORM.name;
 };
