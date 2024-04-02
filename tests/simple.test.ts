@@ -36,13 +36,12 @@ describe('Transactional', () => {
       entities: [User, Counter],
     });
 
-    // @ts-ignore
-    await dataSource.driver.execute(`
+    await dataSource.em.driver.execute(`
 CREATE TABLE IF NOT EXISTS counters (
   value SERIAL PRIMARY KEY
                       );`);
     // @ts-ignore
-    await dataSource.driver.execute(`
+    await dataSource.em.driver.execute(`
       CREATE TABLE "users" (
                              "name" varchar(255) NOT NULL,
                              "money" int4 NOT NULL,
