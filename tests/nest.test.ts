@@ -31,6 +31,7 @@ describe('Integration with Nest.js', () => {
               user: 'postgres',
               password: 'postgres',
               dbName: 'test',
+              allowGlobalContext: true,
               entities: [User],
               synchronize: true,
               logging: false,

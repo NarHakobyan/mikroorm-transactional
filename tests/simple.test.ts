@@ -31,6 +31,7 @@ describe('Transactional', () => {
       // port: 5432,
       user: "postgres",
       password: "postgres",
+      allowGlobalContext: true,
       dbName: "test",
       entities: [User, Counter],
     });
