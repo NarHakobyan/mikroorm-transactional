@@ -1,9 +1,12 @@
-import { Entity, PrimaryKey, Property } from "@mikro-orm/core";
+import { Entity, EntityRepositoryType, PrimaryKey, Property } from "@mikro-orm/core";
+import { UserRepository } from "../repositories/user.repository";
 
 @Entity({
   tableName: 'users',
+  repository: () => UserRepository,
 })
 export class User {
+  [EntityRepositoryType]: UserRepository;
   @PrimaryKey()
   name: string;
 

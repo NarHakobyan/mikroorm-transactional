@@ -1,12 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { DataSource } from 'typeorm';
 
 import { User } from './entities/User.entity';
 import { UserReaderService } from './services/user-reader.service';
 import { UserWriterService } from './services/user-writer.service';
 
-import { initializeTransactionalContext, addTransactionalDataSource, StorageDriver } from '../src';
+import { initializeTransactionalContext, addTransactionalDataSource } from '../src';
+import { MikroORM } from "@mikro-orm/core";
+import { MikroOrmModule } from "@mikro-orm/nestjs";
 
 describe('Integration with Nest.js', () => {
   let app: TestingModule;
@@ -14,19 +14,14 @@ describe('Integration with Nest.js', () => {
   let readerService: UserReaderService;
   let writerService: UserWriterService;
 
-  let dataSource: DataSource;
+  let dataSource: MikroORM;
 
   beforeAll(async () => {
-    const storageDriver =
-      process.env.TEST_STORAGE_DRIVER && process.env.TEST_STORAGE_DRIVER in StorageDriver
-        ? StorageDriver[process.env.TEST_STORAGE_DRIVER as keyof typeof StorageDriver]
-        : StorageDriver.CLS_HOOKED;
-
-    initializeTransactionalContext({ storageDriver });
+    initializeTransactionalContext();
 
     app = await Test.createTestingModule({
       imports: [
-        TypeOrmModule.forRootAsync({
+        MikroOrmModule.forRootAsync({
           useFactory() {
             return {
               type: 'postgres',
@@ -40,31 +35,25 @@ describe('Integration with Nest.js', () => {
               logging: false,
             };
           },
-          async dataSourceFactory(options) {
-            if (!options) {
-              throw new Error('Invalid options passed');
-            }
-
-            return addTransactionalDataSource(new DataSource(options));
-          },
         }),
-
-        TypeOrmModule.forFeature([User]),
+        MikroOrmModule.forFeature([User]),
       ],
       providers: [UserReaderService, UserWriterService],
       exports: [],
     }).compile();
 
+    addTransactionalDataSource(app.get(MikroORM));
+
     readerService = app.get<UserReaderService>(UserReaderService);
     writerService = app.get<UserWriterService>(UserWriterService);
 
-    dataSource = app.get(DataSource);
+    dataSource = app.get(MikroORM);
 
-    await dataSource.createEntityManager().clear(User);
+    dataSource.em.clear();
   });
 
   afterEach(async () => {
-    await dataSource.createEntityManager().clear(User);
+    dataSource.em.clear();
   });
 
   afterAll(async () => {

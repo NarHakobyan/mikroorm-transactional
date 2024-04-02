@@ -1,60 +1,48 @@
-import { DataSource } from 'typeorm';
 import {
   addTransactionalDataSource,
   initializeTransactionalContext,
-  IsolationLevel,
   Propagation,
   runInTransaction,
   runOnTransactionCommit,
   runOnTransactionComplete,
   runOnTransactionRollback,
-  StorageDriver,
   TransactionalError,
 } from '../src';
 
 import { User } from './entities/User.entity';
 import { Counter } from './entities/Counter.entity';
 
-import { UserRepository } from './repositories/user.repository';
-import { extendUserRepository } from './repositories/extend-user-repository';
-
 import { sleep, getCurrentTransactionId } from './utils';
+import { IsolationLevel, MikroORM } from "@mikro-orm/core";
+import { PostgreSqlDriver } from "@mikro-orm/postgresql";
 
-const dataSource: DataSource = new DataSource({
-  type: 'postgres',
+const dataSource = new MikroORM({
+  driver: PostgreSqlDriver,
   host: 'localhost',
   port: 5435,
-  username: 'postgres',
+  user: 'postgres',
   password: 'postgres',
-  database: 'test',
+  dbName: 'test',
   entities: [User, Counter],
-  synchronize: true,
 });
 
-const storageDriver =
-  process.env.TEST_STORAGE_DRIVER && process.env.TEST_STORAGE_DRIVER in StorageDriver
-    ? StorageDriver[process.env.TEST_STORAGE_DRIVER as keyof typeof StorageDriver]
-    : StorageDriver.CLS_HOOKED;
-
-initializeTransactionalContext({ storageDriver });
+initializeTransactionalContext();
 
 addTransactionalDataSource(dataSource);
 
 beforeAll(async () => {
-  await dataSource.initialize();
+  await dataSource.connect();
 });
 
 afterAll(async () => {
-  await dataSource.createEntityManager().clear(User);
-  await dataSource.createEntityManager().clear(Counter);
+  dataSource.em.clear();
 
-  await dataSource.destroy();
+  await dataSource.close();
 });
 
 describe('Transactional', () => {
   afterEach(async () => {
-    await dataSource.createEntityManager().clear(User);
-    await dataSource.createEntityManager().clear(Counter);
+    dataSource.em.clear();
   });
 
   describe('General', () => {
@@ -65,23 +53,19 @@ describe('Transactional', () => {
       },
       {
         name: 'Repository',
-        source: dataSource.getRepository(User),
+        source: dataSource.em.getRepository(User),
       },
       {
         name: 'Entity Manager',
-        source: dataSource.createEntityManager(),
+        source: dataSource.em,
       },
       {
         name: 'Custom Repository',
-        source: new UserRepository(dataSource),
-      },
-      {
-        name: 'Extend Repository',
-        source: extendUserRepository(dataSource.getRepository(User)),
+        source: dataSource.em.getRepository(User),
       },
       {
         name: 'Query Builder',
-        source: () => dataSource.createQueryBuilder(),
+        source: dataSource.em.createQueryBuilder.bind(dataSource.em),
       },
     ];
 
@@ -150,36 +134,15 @@ describe('Transactional', () => {
         let transactionIdA: number | null = null;
         let transactionIdB: number | null = null;
 
-        const userRepository = dataSource.getRepository(User);
+        const userRepository = dataSource.em.getRepository(User);
 
         await runInTransaction(async () => {
-          transactionIdA = await getCurrentTransactionId(dataSource);
-          await userRepository.save(new User('John Doe', 100));
+          transactionIdA = await getCurrentTransactionId(dataSource.em);
+          await userRepository.insert(new User('John Doe', 100));
         });
 
         await runInTransaction(async () => {
-          transactionIdB = await getCurrentTransactionId(dataSource);
-        });
-
-        let transactionDiff = transactionIdB! - transactionIdA!;
-        expect(transactionDiff).toBe(1);
-      });
-    });
-
-    describe('Extend Repository', () => {
-      it('should not create any intermediate transactions', async () => {
-        let transactionIdA: number | null = null;
-        let transactionIdB: number | null = null;
-
-        const customRepository = extendUserRepository(dataSource.getRepository(User));
-
-        await runInTransaction(async () => {
-          transactionIdA = await getCurrentTransactionId(dataSource);
-          await customRepository.save(new User('John Doe', 100));
-        });
-
-        await runInTransaction(async () => {
-          transactionIdB = await getCurrentTransactionId(dataSource);
+          transactionIdB = await getCurrentTransactionId(dataSource.em);
         });
 
         let transactionDiff = transactionIdB! - transactionIdA!;
@@ -215,7 +178,7 @@ describe('Transactional', () => {
 
     //     await runInTransaction(async () => {
     //       transactionIdA = await getCurrentTransactionId(dataSource);
-    //       await dataSource.createEntityManager().save(new User('John Doe', 100));
+    //       await dataSource.em.save(new User('John Doe', 100));
     //     });
 
     //     await runInTransaction(async () => {
@@ -231,19 +194,19 @@ describe('Transactional', () => {
   // Focus more on the repository, since it's the most common use case
   describe('Repository', () => {
     it('supports basic transactions', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
 
       let transactionIdBefore: number | null = null;
       await runInTransaction(async () => {
-        transactionIdBefore = await getCurrentTransactionId(userRepository);
+        transactionIdBefore = await getCurrentTransactionId(dataSource.em);
         await userRepository.createUser('John Doe');
-        const transactionIdAfter = await getCurrentTransactionId(userRepository);
+        const transactionIdAfter = await getCurrentTransactionId(dataSource.em);
 
         expect(transactionIdBefore).toBeTruthy();
         expect(transactionIdBefore).toBe(transactionIdAfter);
       });
 
-      const transactionIdOutside = await getCurrentTransactionId(userRepository);
+      const transactionIdOutside = await getCurrentTransactionId(dataSource.em);
       expect(transactionIdOutside).toBe(null);
       expect(transactionIdOutside).not.toBe(transactionIdBefore);
 
@@ -252,7 +215,7 @@ describe('Transactional', () => {
     });
 
     it('should rollback the transaction if an error is thrown', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
 
       try {
         await runInTransaction(async () => {
@@ -267,14 +230,14 @@ describe('Transactional', () => {
     });
 
     it('supports nested transactions', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
 
       await runInTransaction(async () => {
-        const transactionIdBefore = await getCurrentTransactionId(userRepository);
+        const transactionIdBefore = await getCurrentTransactionId(dataSource.em);
         await userRepository.createUser('John Doe');
 
         await runInTransaction(async () => {
-          const transactionIdAfter = await getCurrentTransactionId(userRepository);
+          const transactionIdAfter = await getCurrentTransactionId(dataSource.em);
           expect(transactionIdBefore).toBe(transactionIdAfter);
         });
       });
@@ -283,7 +246,7 @@ describe('Transactional', () => {
     });
 
     it('supports several concurrent transactions', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
 
       let transactionA: number | null = null;
       let transactionB: number | null = null;
@@ -293,17 +256,17 @@ describe('Transactional', () => {
         runInTransaction(async () => {
           userRepository.createUser('John Doe');
 
-          transactionA = await getCurrentTransactionId(userRepository);
+          transactionA = await getCurrentTransactionId(dataSource.em);
         }),
         runInTransaction(async () => {
           userRepository.createUser('Bob Smith');
 
-          transactionB = await getCurrentTransactionId(userRepository);
+          transactionB = await getCurrentTransactionId(dataSource.em);
         }),
         runInTransaction(async () => {
           userRepository.createUser('Alice Watson');
 
-          transactionC = await getCurrentTransactionId(userRepository);
+          transactionC = await getCurrentTransactionId(dataSource.em);
         }),
       ]);
 
@@ -322,7 +285,7 @@ describe('Transactional', () => {
       let transactionSetup = false;
       let transactionEnded = false;
 
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
 
       let transactionIdOutside: number | null = null;
 
@@ -331,7 +294,7 @@ describe('Transactional', () => {
 
         await sleep(500);
 
-        const transactionIdInside = await getCurrentTransactionId(userRepository);
+        const transactionIdInside = await getCurrentTransactionId(dataSource.em);
 
         expect(transactionIdInside).toBeTruthy();
         expect(transactionIdOutside).toBe(null);
@@ -351,7 +314,7 @@ describe('Transactional', () => {
       });
 
       expect(transactionEnded).toBe(false);
-      transactionIdOutside = await getCurrentTransactionId(userRepository);
+      transactionIdOutside = await getCurrentTransactionId(dataSource.em);
       expect(transactionIdOutside).toBe(null);
 
       expect(transactionEnded).toBe(false);
@@ -360,36 +323,18 @@ describe('Transactional', () => {
     });
   });
 
-  describe('Extend Repository', () => {
-    it('should rollback the transaction if an error is thrown', async () => {
-      const repo = extendUserRepository(dataSource.getRepository(User));
-      const name = 'John Doe';
-
-      try {
-        await runInTransaction(async () => {
-          await repo.insertUser(name);
-
-          await repo.insertUser(name);
-        });
-      } catch {}
-
-      const user = await repo.findOneBy({ name });
-      expect(user).toBeNull();
-    });
-  });
-
   describe('Propagation', () => {
     it('should support "REQUIRED" propagation', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
 
       await runInTransaction(async () => {
-        const transactionId = await getCurrentTransactionId(userRepository);
+        const transactionId = await getCurrentTransactionId(dataSource.em);
         await userRepository.createUser('John Doe');
 
         await runInTransaction(
           async () => {
             await userRepository.createUser('Bob Smith');
-            const transactionIdNested = await getCurrentTransactionId(userRepository);
+            const transactionIdNested = await getCurrentTransactionId(dataSource.em);
 
             // We expect the nested transaction to be under the same transaction
             expect(transactionId).toBe(transactionIdNested);
@@ -400,16 +345,16 @@ describe('Transactional', () => {
     });
 
     it('should support "SUPPORTS" propagation if active transaction exists', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
 
       await runInTransaction(async () => {
-        const transactionId = await getCurrentTransactionId(userRepository);
+        const transactionId = await getCurrentTransactionId(dataSource.em);
         await userRepository.createUser('John Doe');
 
         await runInTransaction(
           async () => {
             await userRepository.createUser('Bob Smith');
-            const transactionIdNested = await getCurrentTransactionId(userRepository);
+            const transactionIdNested = await getCurrentTransactionId(dataSource.em);
 
             // We expect the nested transaction to be under the same transaction
             expect(transactionId).toBe(transactionIdNested);
@@ -420,11 +365,11 @@ describe('Transactional', () => {
     });
 
     it('should support "SUPPORTS" propagation if active transaction doesn\'t exist', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
 
       await runInTransaction(
         async () => {
-          const transactionId = await getCurrentTransactionId(userRepository);
+          const transactionId = await getCurrentTransactionId(dataSource.em);
 
           // We expect the code to be executed without a transaction
           expect(transactionId).toBe(null);
@@ -434,14 +379,14 @@ describe('Transactional', () => {
     });
 
     it('should support "MANDATORY" propagation if active transaction exists', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
 
       await runInTransaction(async () => {
-        const transactionId = await getCurrentTransactionId(userRepository);
+        const transactionId = await getCurrentTransactionId(dataSource.em);
 
         await runInTransaction(
           async () => {
-            const transactionIdNested = await getCurrentTransactionId(userRepository);
+            const transactionIdNested = await getCurrentTransactionId(dataSource.em);
 
             // We expect the nested transaction to be under the same transaction
             expect(transactionId).toBe(transactionIdNested);
@@ -452,22 +397,22 @@ describe('Transactional', () => {
     });
 
     it('should throw an error if "MANDATORY" propagation is used without an active transaction', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
 
       await expect(
-        runInTransaction(() => userRepository.find(), { propagation: Propagation.MANDATORY }),
+        runInTransaction(() => userRepository.findAll(), { propagation: Propagation.MANDATORY }),
       ).rejects.toThrowError(TransactionalError);
     });
 
     it('should support "REQUIRES_NEW" propagation', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
 
       await runInTransaction(async () => {
-        const transactionId = await getCurrentTransactionId(userRepository);
+        const transactionId = await getCurrentTransactionId(dataSource.em);
 
         await runInTransaction(
           async () => {
-            const transactionIdNested = await getCurrentTransactionId(userRepository);
+            const transactionIdNested = await getCurrentTransactionId(dataSource.em);
 
             // We expect the nested transaction to be under a different transaction
             expect(transactionId).not.toBe(transactionIdNested);
@@ -475,21 +420,21 @@ describe('Transactional', () => {
           { propagation: Propagation.REQUIRES_NEW },
         );
 
-        const transactionIdAfter = await getCurrentTransactionId(userRepository);
+        const transactionIdAfter = await getCurrentTransactionId(dataSource.em);
         // We expect then the transaction to be the same as before
         expect(transactionId).toBe(transactionIdAfter);
       });
     });
 
     it('should support "NOT_SUPPORTED" propagation', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
 
       await runInTransaction(async () => {
-        const transactionId = await getCurrentTransactionId(userRepository);
+        const transactionId = await getCurrentTransactionId(dataSource.em);
 
         await runInTransaction(
           async () => {
-            const transactionIdNested = await getCurrentTransactionId(userRepository);
+            const transactionIdNested = await getCurrentTransactionId(dataSource.em);
 
             // We expect the code to be executed without a transaction
             expect(transactionIdNested).toBe(null);
@@ -497,18 +442,18 @@ describe('Transactional', () => {
           { propagation: Propagation.NOT_SUPPORTED },
         );
 
-        const transactionIdAfter = await getCurrentTransactionId(userRepository);
+        const transactionIdAfter = await getCurrentTransactionId(dataSource.em);
         // We expect then the transaction to be the same as before
         expect(transactionId).toBe(transactionIdAfter);
       });
     });
 
     it('should support "NEVER" propagation if active transaction doesn\'t exist', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
 
       await runInTransaction(
         async () => {
-          const transactionId = await getCurrentTransactionId(userRepository);
+          const transactionId = await getCurrentTransactionId(dataSource.em);
 
           // We expect the code to be executed without a transaction
           expect(transactionId).toBe(null);
@@ -518,11 +463,11 @@ describe('Transactional', () => {
     });
 
     it('should throw an error if "NEVER" propagation is used with an active transaction', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
 
       await runInTransaction(async () => {
         expect(() =>
-          runInTransaction(() => userRepository.find(), { propagation: Propagation.NEVER }),
+          runInTransaction(() => userRepository.findAll(), { propagation: Propagation.NEVER }),
         ).rejects.toThrowError(TransactionalError);
       });
     });
@@ -530,7 +475,7 @@ describe('Transactional', () => {
 
   describe('Hooks', () => {
     it('should run "runOnTransactionCommit" hook', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
       const commitSpy = jest.fn();
       const rollbackSpy = jest.fn();
       const completeSpy = jest.fn();
@@ -549,7 +494,7 @@ describe('Transactional', () => {
     });
 
     it('should run "runOnTransactionRollback" hook', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
       const commitSpy = jest.fn();
       const rollbackSpy = jest.fn();
       const completeSpy = jest.fn();
@@ -572,7 +517,7 @@ describe('Transactional', () => {
     });
 
     it('should run "runOnTransactionComplete" hook', async () => {
-      const userRepository = new UserRepository(dataSource);
+      const userRepository = dataSource.em.getRepository(User);
       const commitSpy = jest.fn();
       const rollbackSpy = jest.fn();
       const completeSpy = jest.fn();
@@ -595,13 +540,13 @@ describe('Transactional', () => {
     it('should read the most recent committed rows when using READ COMMITTED isolation level', async () => {
       await runInTransaction(
         async () => {
-          const userRepository = new UserRepository(dataSource);
+          const userRepository = dataSource.em.getRepository(User);
           const totalUsers = await userRepository.count();
           expect(totalUsers).toBe(0);
 
           // Outside of the transaction
-          await dataSource.transaction(async (manager) => {
-            await manager.save(new User('John Doe', 100));
+          await dataSource.em.transactional(async (manager) => {
+            await manager.insert(new User('John Doe', 100));
           });
 
           const totalUsers2 = await userRepository.count();
@@ -614,13 +559,13 @@ describe('Transactional', () => {
     it("shouldn't see the most recent committed rows when using REPEATABLE READ isolation level", async () => {
       await runInTransaction(
         async () => {
-          const userRepository = new UserRepository(dataSource);
+          const userRepository = dataSource.em.getRepository(User);
           const totalUsers = await userRepository.count();
           expect(totalUsers).toBe(0);
 
           // Outside of the transaction
-          await dataSource.transaction(async (manager) => {
-            await manager.save(new User('John Doe', 100));
+          await dataSource.em.transactional(async (manager) => {
+            await manager.insert(new User('John Doe', 100));
           });
 
           const totalUsers2 = await userRepository.count();
