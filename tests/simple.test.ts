@@ -27,8 +27,8 @@ describe('Transactional', () => {
     dataSource = await MikroORM.init({
       driver: PostgreSqlDriver,
       host: "localhost",
-      // port: 5435,
-      port: 5432,
+      port: 5435,
+      // port: 5432,
       user: "postgres",
       password: "postgres",
       dbName: "test",
