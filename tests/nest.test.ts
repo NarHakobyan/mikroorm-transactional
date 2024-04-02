@@ -7,6 +7,7 @@ import { UserWriterService } from './services/user-writer.service';
 import { initializeTransactionalContext, addTransactionalDataSource } from '../src';
 import { MikroORM } from "@mikro-orm/core";
 import { MikroOrmModule } from "@mikro-orm/nestjs";
+import { PostgreSqlDriver } from "@mikro-orm/postgresql";
 
 describe('Integration with Nest.js', () => {
   let app: TestingModule;
@@ -24,12 +25,12 @@ describe('Integration with Nest.js', () => {
         MikroOrmModule.forRootAsync({
           useFactory() {
             return {
-              type: 'postgres',
+              driver: PostgreSqlDriver,
               host: 'localhost',
               port: 5436,
-              username: 'postgres',
+              user: 'postgres',
               password: 'postgres',
-              database: 'test',
+              dbName: 'test',
               entities: [User],
               synchronize: true,
               logging: false,
