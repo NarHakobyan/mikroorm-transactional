@@ -36,6 +36,7 @@ describe('Transactional', () => {
       entities: [User, Counter],
     });
 
+    // @ts-ignore
     await dataSource.em.driver.execute(`
 CREATE TABLE IF NOT EXISTS counters (
   value SERIAL PRIMARY KEY
