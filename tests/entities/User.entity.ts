@@ -1,11 +1,13 @@
-import { Column, Entity, PrimaryColumn } from 'typeorm';
+import { Entity, PrimaryKey, Property } from "@mikro-orm/core";
 
-@Entity('users')
+@Entity({
+  tableName: 'users',
+})
 export class User {
-  @PrimaryColumn()
+  @PrimaryKey()
   name: string;
 
-  @Column({ type: 'integer' })
+  @Property({ type: 'integer' })
   money: number;
 
   constructor(name: string, money: number) {

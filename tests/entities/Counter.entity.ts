@@ -1,7 +1,9 @@
-import { Entity, PrimaryGeneratedColumn } from '@mikro-orm/core';
+import { Entity, PrimaryKey } from "@mikro-orm/core";
 
-@Entity('counters')
+@Entity({
+  tableName: 'counters',
+})
 export class Counter {
-  @PrimaryGeneratedColumn()
+  @PrimaryKey()
   value: number;
 }
