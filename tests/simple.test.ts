@@ -32,8 +32,22 @@ describe('Transactional', () => {
       user: "postgres",
       password: "postgres",
       dbName: "test",
-      entities: [User, Counter]
+      entities: [User, Counter],
     });
+
+    // @ts-ignore
+    await dataSource.driver.execute(`
+CREATE TABLE IF NOT EXISTS counters (
+  value SERIAL PRIMARY KEY
+                      );`);
+    // @ts-ignore
+    await dataSource.driver.execute(`
+      CREATE TABLE "users" (
+                             "name" varchar(255) NOT NULL,
+                             "money" int4 NOT NULL,
+                             PRIMARY KEY ("name")
+      );
+    `);
 
     addTransactionalDataSource(dataSource);
 
