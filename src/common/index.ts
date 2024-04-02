@@ -91,7 +91,7 @@ const getEntityManagerInContext = (dataSourceName: DataSourceName) => {
 const patchDataSource = (dataSource: MikroORM) => {
   let originalManager = dataSource.em;
 
-  Object.defineProperty(dataSource, 'manager', {
+  Object.defineProperty(dataSource, 'em', {
     configurable: true,
     get() {
       return (
@@ -99,8 +99,8 @@ const patchDataSource = (dataSource: MikroORM) => {
         originalManager
       );
     },
-    set(manager: EntityManager) {
-      originalManager = manager;
+    set(em: EntityManager) {
+      originalManager = em;
     },
   });
 
@@ -110,7 +110,7 @@ const patchDataSource = (dataSource: MikroORM) => {
   // }
 
   // dataSource.query = function (...args: unknown[]) {
-  //   args[2] = args[2] || this.manager?.queryRunner;
+  //   args[2] = args[2] || this.em?.queryRunner;
   //
   //   return originalQuery.apply(this, args);
   // };
@@ -122,10 +122,10 @@ const patchDataSource = (dataSource: MikroORM) => {
   //
   // dataSource.createQueryBuilder = function (...args: unknown[]) {
   //   if (args.length === 0) {
-  //     return originalCreateQueryBuilder.apply(this, [this.manager?.queryRunner]);
+  //     return originalCreateQueryBuilder.apply(this, [this.em?.queryRunner]);
   //   }
   //
-  //   args[2] = args[2] || this.manager?.queryRunner;
+  //   args[2] = args[2] || this.em?.queryRunner;
   //
   //   return originalCreateQueryBuilder.apply(this, args);
   // };
@@ -147,7 +147,7 @@ export const initializeTransactionalContext = (options?: Partial<TypeormTransact
   setTransactionalOptions(options);
 
   const patchManager = (repositoryType: unknown) => {
-    Object.defineProperty(repositoryType, 'manager', {
+    Object.defineProperty(repositoryType, 'em', {
       configurable: true,
       get() {
         return (
@@ -158,8 +158,8 @@ export const initializeTransactionalContext = (options?: Partial<TypeormTransact
           ) || this[MIKROORM_ENTITY_MANAGER_NAME]
         );
       },
-      set(manager: EntityManager | undefined) {
-        this[MIKROORM_ENTITY_MANAGER_NAME] = manager;
+      set(em: EntityManager | undefined) {
+        this[MIKROORM_ENTITY_MANAGER_NAME] = em;
       },
     });
   };
@@ -172,7 +172,7 @@ export const initializeTransactionalContext = (options?: Partial<TypeormTransact
         /**
          * Store current manager
          */
-        repository[MIKROORM_ENTITY_MANAGER_NAME] = repository.manager;
+        repository[MIKROORM_ENTITY_MANAGER_NAME] = repository.em;
       }
 
       return repository;
