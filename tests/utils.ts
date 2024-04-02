@@ -22,9 +22,11 @@ export const getCurrentTransactionId = async (
     id = result?.txid_current_if_assigned || null;
   } else {
 
-    await queryable.getDriver().execute('INSERT INTO "counters" values (default)');
+    // @ts-ignore
+    await queryable.driver.execute('INSERT INTO "counters" values (default)');
 
-    const result = await queryable.getDriver().execute('SELECT txid_current_if_assigned()');
+    // @ts-ignore
+    const result = await queryable.driver.execute('SELECT txid_current_if_assigned()');
     id = result[0]?.txid_current_if_assigned || null;
   }
 

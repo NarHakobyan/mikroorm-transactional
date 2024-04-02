@@ -16,56 +16,51 @@ import { sleep, getCurrentTransactionId } from './utils';
 import { IsolationLevel, MikroORM } from "@mikro-orm/core";
 import { PostgreSqlDriver } from "@mikro-orm/postgresql";
 
-const dataSource = new MikroORM({
-  driver: PostgreSqlDriver,
-  host: 'localhost',
-  port: 5435,
-  user: 'postgres',
-  password: 'postgres',
-  dbName: 'test',
-  entities: [User, Counter],
-});
-
-initializeTransactionalContext();
-
-addTransactionalDataSource(dataSource);
-
-beforeAll(async () => {
-  await dataSource.connect();
-});
-
-afterAll(async () => {
-  dataSource.em.clear();
-
-  await dataSource.close();
-});
-
 describe('Transactional', () => {
-  afterEach(async () => {
-    dataSource.em.clear();
+  let dataSource: MikroORM<PostgreSqlDriver>;
+  initializeTransactionalContext();
+
+  beforeAll(async () => {
+    if (dataSource) {
+      return;
+    }
+    dataSource = await MikroORM.init({
+      driver: PostgreSqlDriver,
+      host: "localhost",
+      // port: 5435,
+      port: 5432,
+      user: "postgres",
+      password: "postgres",
+      dbName: "test",
+      entities: [User, Counter]
+    });
+
+    addTransactionalDataSource(dataSource);
+
   });
 
   describe('General', () => {
+
     const sources = [
       {
         name: 'DataSource',
-        source: dataSource,
+        source: () => dataSource,
       },
       {
         name: 'Repository',
-        source: dataSource.em.getRepository(User),
+        source: () => dataSource.em.getRepository(User),
       },
       {
         name: 'Entity Manager',
-        source: dataSource.em,
+        source: () => dataSource.em,
       },
       {
         name: 'Custom Repository',
-        source: dataSource.em.getRepository(User),
+        source: () => dataSource.em.getRepository(User),
       },
       {
         name: 'Query Builder',
-        source: dataSource.em.createQueryBuilder.bind(dataSource.em),
+        source: () => dataSource.em.createQueryBuilder.bind(dataSource.em),
       },
     ];
 
@@ -74,24 +69,24 @@ describe('Transactional', () => {
         let transactionIdBefore: number | null = null;
 
         await runInTransaction(async () => {
-          transactionIdBefore = await getCurrentTransactionId(source);
-          const transactionIdAfter = await getCurrentTransactionId(source);
+          transactionIdBefore = await getCurrentTransactionId(source());
+          const transactionIdAfter = await getCurrentTransactionId(source());
 
           expect(transactionIdBefore).toBeTruthy();
           expect(transactionIdBefore).toBe(transactionIdAfter);
         });
 
-        const transactionIdOutside = await getCurrentTransactionId(source);
+        const transactionIdOutside = await getCurrentTransactionId(source());
         expect(transactionIdOutside).toBe(null);
         expect(transactionIdOutside).not.toBe(transactionIdBefore);
       });
 
       it('supports nested transactions', async () => {
         await runInTransaction(async () => {
-          const transactionIdBefore = await getCurrentTransactionId(source);
+          const transactionIdBefore = await getCurrentTransactionId(source());
 
           await runInTransaction(async () => {
-            const transactionIdAfter = await getCurrentTransactionId(source);
+            const transactionIdAfter = await getCurrentTransactionId(source());
             expect(transactionIdBefore).toBe(transactionIdAfter);
           });
         });
@@ -106,13 +101,13 @@ describe('Transactional', () => {
 
         await Promise.all([
           runInTransaction(async () => {
-            transactionA = await getCurrentTransactionId(source);
+            transactionA = await getCurrentTransactionId(source());
           }),
           runInTransaction(async () => {
-            transactionB = await getCurrentTransactionId(source);
+            transactionB = await getCurrentTransactionId(source());
           }),
           runInTransaction(async () => {
-            transactionC = await getCurrentTransactionId(source);
+            transactionC = await getCurrentTransactionId(source());
           }),
         ]);
 
@@ -193,6 +188,7 @@ describe('Transactional', () => {
 
   // Focus more on the repository, since it's the most common use case
   describe('Repository', () => {
+
     it('supports basic transactions', async () => {
       const userRepository = dataSource.em.getRepository(User);
 
@@ -324,6 +320,7 @@ describe('Transactional', () => {
   });
 
   describe('Propagation', () => {
+
     it('should support "REQUIRED" propagation', async () => {
       const userRepository = dataSource.em.getRepository(User);
 
@@ -474,6 +471,7 @@ describe('Transactional', () => {
   });
 
   describe('Hooks', () => {
+
     it('should run "runOnTransactionCommit" hook', async () => {
       const userRepository = dataSource.em.getRepository(User);
       const commitSpy = jest.fn();
@@ -537,6 +535,7 @@ describe('Transactional', () => {
   });
 
   describe('Isolation', () => {
+
     it('should read the most recent committed rows when using READ COMMITTED isolation level', async () => {
       await runInTransaction(
         async () => {
