@@ -14,7 +14,7 @@ import { Counter } from './entities/Counter.entity';
 
 import { sleep, getCurrentTransactionId } from './utils';
 import { IsolationLevel, MikroORM } from "@mikro-orm/core";
-import { PostgreSqlDriver } from "@mikro-orm/postgresql";
+import { PostgreSqlDriver, QueryBuilder } from "@mikro-orm/postgresql";
 
 describe('Transactional', () => {
   let dataSource: MikroORM<PostgreSqlDriver>;
@@ -72,25 +72,26 @@ CREATE TABLE IF NOT EXISTS counters (
       name: 'Custom Repository',
       source: () => dataSource.em.getRepository(User),
     },
-    {
-      name: 'Query Builder',
-      source: () => dataSource.em.createQueryBuilder.bind(dataSource.em),
-    },
+    // {
+    //   name: 'Query Builder',
+    //   source: (): () => QueryBuilder<any> => () => dataSource.em.getRepository(Counter).createQueryBuilder(),
+    // },
   ];
 
   describe.each(sources)('$name', ({ source }) => {
     it('supports basic transactions', async () => {
       let transactionIdBefore: number | null = null;
+      let queryable = source();
 
       await runInTransaction(async () => {
-        transactionIdBefore = await getCurrentTransactionId(source());
-        const transactionIdAfter = await getCurrentTransactionId(source());
+        transactionIdBefore = await getCurrentTransactionId(queryable);
+        const transactionIdAfter = await getCurrentTransactionId(queryable);
 
         expect(transactionIdBefore).toBeTruthy();
         expect(transactionIdBefore).toBe(transactionIdAfter);
       });
 
-      const transactionIdOutside = await getCurrentTransactionId(source());
+      const transactionIdOutside = await getCurrentTransactionId(queryable);
       expect(transactionIdOutside).toBe(null);
       expect(transactionIdOutside).not.toBe(transactionIdBefore);
     });

@@ -2,37 +2,31 @@ import { PostgreSqlDriver, QueryBuilder } from "@mikro-orm/postgresql";
 import { EntityManager, EntityRepository, MikroORM } from "@mikro-orm/core";
 
 export const getCurrentTransactionId = async (
-  queryable: (() => QueryBuilder<any>) | EntityManager<PostgreSqlDriver>,
+  queryable: (() => QueryBuilder) | EntityManager<PostgreSqlDriver> | MikroORM<PostgreSqlDriver> | EntityRepository<any>,
 ): Promise<number | null> => {
   let id: string | null;
 
   if (typeof queryable === 'function') {
-    const qb = queryable();
-
-    await qb
+    await queryable()
       .from( 'counters')
-      .insert({ value: () => 'DEFAULT' })
+      .insert({  })
       .execute();
 
-    const result = await qb
-      .select('txid_current_if_assigned() as txid_current_if_assigned')
+    const result = await queryable()
+      .select('pg_current_xact_id_if_assigned() as pg_current_xact_id_if_assigned')
       .getSingleResult();
 
-    id = result?.txid_current_if_assigned || null;
+    id = result?.pg_current_xact_id_if_assigned || null;
   } else {
+    const driver = ((<any>queryable).driver || (<any>queryable).em.driver) as PostgreSqlDriver;
 
-    // @ts-ignore
-    if (!queryable.driver) {
-      console.log(queryable);
-    }
-    // @ts-ignore
-    await queryable.driver.execute('INSERT INTO "counters" values (default)');
+    await driver.execute('INSERT INTO "counters" values (default)');
 
-    // @ts-ignore
-    const result = await queryable.driver.execute('SELECT txid_current_if_assigned() as txid_current_if_assigned');
-    id = result[0]?.txid_current_if_assigned || null;
+    const result = await driver.execute('SELECT pg_current_xact_id_if_assigned() as pg_current_xact_id_if_assigned');
+
+    id = result[0]?.pg_current_xact_id_if_assigned || null;
+
   }
-
   return id ? Number.parseInt(id, 10) : null;
 };
 

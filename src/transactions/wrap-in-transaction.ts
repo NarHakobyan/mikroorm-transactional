@@ -10,6 +10,7 @@ import { Propagation } from '../enums/propagation';
 import { runInNewHookContext } from '../hooks';
 import { TransactionalError } from '../errors/transactional';
 import { EntityManager, IsolationLevel } from '@mikro-orm/core';
+import { PostgreSqlDriver } from '@mikro-orm/postgresql';
 
 export interface WrapInTransactionOptions {
   /**
@@ -63,15 +64,22 @@ export const wrapInTransaction = <Fn extends (this: any, ...args: any[]) => Retu
         }
       };
 
-      if (isolationLevel) {
-        return runInNewHookContext(context, () => {
-          return dataSource.em.transactional(transactionCallback, { isolationLevel });
+      // return runInNewHookContext(context, () => {
+      //   return dataSource.em.transactional(transactionCallback, { isolationLevel });
+      // });
+
+      return runInNewHookContext(context, async () => {
+        await dataSource.em.begin({
+          isolationLevel,
         });
-      } else {
-        return runInNewHookContext(context, () => {
-          return dataSource.em.transactional(transactionCallback);
-        });
-      }
+        try {
+          await transactionCallback(dataSource.em);
+          await dataSource.em.commit();
+        } catch (err) {
+          await dataSource.em.rollback();
+          throw err;
+        }
+      });
     };
 
     return context.run(async () => {
