@@ -64,8 +64,6 @@ CREATE TABLE IF NOT EXISTS counters (
 
     readerService = app.get<UserReaderService>(UserReaderService);
     writerService = app.get<UserWriterService>(UserWriterService);
-
-    dataSource.em.clear();
   });
 
   afterEach(async () => {
