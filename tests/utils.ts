@@ -16,17 +16,20 @@ export const getCurrentTransactionId = async (
 
     const result = await qb
       .select('txid_current_if_assigned() as txid_current_if_assigned')
-      .from( 'counters')
       .getSingleResult();
 
     id = result?.txid_current_if_assigned || null;
   } else {
 
     // @ts-ignore
+    if (!queryable.driver) {
+      console.log(queryable);
+    }
+    // @ts-ignore
     await queryable.driver.execute('INSERT INTO "counters" values (default)');
 
     // @ts-ignore
-    const result = await queryable.driver.execute('SELECT txid_current_if_assigned()');
+    const result = await queryable.driver.execute('SELECT txid_current_if_assigned() as txid_current_if_assigned');
     id = result[0]?.txid_current_if_assigned || null;
   }
 

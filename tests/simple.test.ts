@@ -27,12 +27,13 @@ describe('Transactional', () => {
     dataSource = await MikroORM.init({
       driver: PostgreSqlDriver,
       host: "localhost",
-      port: 5435,
-      // port: 5432,
+      port: 5432,
       user: "postgres",
       password: "postgres",
       allowGlobalContext: true,
       dbName: "test",
+      debug: true,
+      logger: console.log.bind(console),
       entities: [User, Counter],
     });
 
@@ -43,7 +44,7 @@ CREATE TABLE IF NOT EXISTS counters (
                       );`);
     // @ts-ignore
     await dataSource.em.driver.execute(`
-      CREATE TABLE "users" (
+      CREATE TABLE IF NOT EXISTS "users" (
                              "name" varchar(255) NOT NULL,
                              "money" int4 NOT NULL,
                              PRIMARY KEY ("name")

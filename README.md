@@ -83,7 +83,7 @@ import { initializeTransactionalContext, addTransactionalDataSource, StorageDriv
 const dataSource = new DataSource({
 	  type: 'postgres',
     host: 'localhost',
-    port: 5435,
+    port: 5432,
     username: 'postgres',
     password: 'postgres'
 });
@@ -134,7 +134,7 @@ import { addTransactionalDataSource } from 'typeorm-transactional';
 	       return {
 	         type: 'postgres',
 	         host: 'localhost',
-	         port: 5435,
+	         port: 5432,
 	         username: 'postgres',
 	         password: 'postgres',
 	         synchronize: true,
