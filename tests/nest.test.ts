@@ -44,12 +44,26 @@ describe('Integration with Nest.js', () => {
       exports: [],
     }).compile();
 
-    addTransactionalDataSource(app.get(MikroORM));
+    dataSource = app.get(MikroORM);
+
+    addTransactionalDataSource(dataSource);
+
+    // @ts-ignore
+    await dataSource.em.driver.execute(`
+CREATE TABLE IF NOT EXISTS counters (
+  value SERIAL PRIMARY KEY
+                      );`);
+    // @ts-ignore
+    await dataSource.em.driver.execute(`
+      CREATE TABLE IF NOT EXISTS "users" (
+                             "name" varchar(255) NOT NULL,
+                             "money" int4 NOT NULL,
+                             PRIMARY KEY ("name")
+      );
+    `);
 
     readerService = app.get<UserReaderService>(UserReaderService);
     writerService = app.get<UserWriterService>(UserWriterService);
-
-    dataSource = app.get(MikroORM);
 
     dataSource.em.clear();
   });
