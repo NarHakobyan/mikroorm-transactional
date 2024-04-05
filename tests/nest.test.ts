@@ -51,15 +51,17 @@ describe('Integration with Nest.js', () => {
 
     // @ts-ignore
     await dataSource.em.driver.execute(`
-CREATE TABLE IF NOT EXISTS counters (
+DROP TABLE IF EXISTS "counters";
+CREATE TABLE IF NOT EXISTS "counters" (
   value SERIAL PRIMARY KEY
                       );`);
     // @ts-ignore
     await dataSource.em.driver.execute(`
-      CREATE TABLE IF NOT EXISTS "users" (
-                             "name" varchar(255) NOT NULL,
-                             "money" int4 NOT NULL,
-                             PRIMARY KEY ("name")
+DROP TABLE IF EXISTS "users";
+CREATE TABLE IF NOT EXISTS "users" (
+                       "name" varchar(255) NOT NULL,
+                       "money" int4 NOT NULL,
+                       PRIMARY KEY ("name")
       );
     `);
 
@@ -68,7 +70,10 @@ CREATE TABLE IF NOT EXISTS counters (
   });
 
   afterEach(async () => {
-    dataSource.em.clear();
+    // @ts-ignore
+    await dataSource.em.driver.execute(`
+TRUNCATE TABLE "users" RESTART IDENTITY CASCADE;
+    `);
   });
 
   afterAll(async () => {
@@ -90,7 +95,7 @@ CREATE TABLE IF NOT EXISTS counters (
   });
 
   it('should fail to create a user using service if error was thrown', async () => {
-    const name = 'John Doe';
+    const name = 'John Doe 2';
     const onTransactionCompleteSpy = jest.fn();
 
     expect(() =>

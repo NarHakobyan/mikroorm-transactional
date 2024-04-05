@@ -73,8 +73,10 @@ export const wrapInTransaction = <Fn extends (this: any, ...args: any[]) => Retu
           isolationLevel,
         });
         try {
-          await transactionCallback(dataSource.em);
+          const data = await transactionCallback(dataSource.em);
           await dataSource.em.commit();
+
+          return data;
         } catch (err) {
           await dataSource.em.rollback();
           throw err;
