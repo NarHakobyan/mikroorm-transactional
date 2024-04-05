@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS "users" (
     // @ts-ignore
     await dataSource.em.driver.execute(`
 TRUNCATE TABLE "users" RESTART IDENTITY CASCADE;
+TRUNCATE TABLE "counters" RESTART IDENTITY CASCADE;
     `);
   });
 

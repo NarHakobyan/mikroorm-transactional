@@ -39,11 +39,13 @@ describe('Transactional', () => {
 
     // @ts-ignore
     await dataSource.em.driver.execute(`
-CREATE TABLE IF NOT EXISTS counters (
+DROP TABLE IF EXISTS "counters";
+CREATE TABLE IF NOT EXISTS "counters" (
   value SERIAL PRIMARY KEY
                       );`);
     // @ts-ignore
     await dataSource.em.driver.execute(`
+DROP TABLE IF EXISTS "users";
       CREATE TABLE IF NOT EXISTS "users" (
                              "name" varchar(255) NOT NULL,
                              "money" int4 NOT NULL,
@@ -53,6 +55,19 @@ CREATE TABLE IF NOT EXISTS counters (
 
     addTransactionalDataSource(dataSource);
 
+  });
+
+
+  afterEach(async () => {
+    // @ts-ignore
+    await dataSource.em.driver.execute(`
+TRUNCATE TABLE "posts" RESTART IDENTITY CASCADE;
+TRUNCATE TABLE "counters" RESTART IDENTITY CASCADE;
+    `);
+  });
+
+  afterAll(async () => {
+    await dataSource.close();
   });
 
   const sources = [
