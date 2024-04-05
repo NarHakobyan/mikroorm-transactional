@@ -27,7 +27,8 @@ describe('Integration with Nest.js', () => {
             return {
               driver: PostgreSqlDriver,
               host: 'localhost',
-              port: 5436,
+              // port: 5436,
+              port: 5432,
               user: 'postgres',
               password: 'postgres',
               dbName: 'test',

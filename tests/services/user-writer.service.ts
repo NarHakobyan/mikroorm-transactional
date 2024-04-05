@@ -22,7 +22,7 @@ export class UserWriterService {
       runOnTransactionRollback(() => hookHandler(false));
     }
 
-    const user = new User(name, 0);
+    const user = this.repository.create({ name, money: 0 });
     await this.repository.insert(user);
 
     return user;
